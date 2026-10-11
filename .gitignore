@@ -1,0 +1,17 @@
+# Each service has its own .gitignore for framework files (vendor/, node_modules/, dist/ ...).
+
+# Environment files hold secrets — only the *.example versions are committed
+.env
+.env.*
+!.env.example
+
+# Private keys (JWT signing keys are generated locally with `make keys`)
+*.pem
+*.key
+
+# Editors & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
