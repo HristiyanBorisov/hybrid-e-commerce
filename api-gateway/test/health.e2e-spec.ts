@@ -1,28 +1,20 @@
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
+import { createTestApp } from './create-test-app.js';
 
 describe('GET /api/health', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
+    app = await createTestApp();
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it('returns 200 with status ok', () => {
+  it('returns 200 with status ok, without a version in the URL', () => {
     return request(app.getHttpServer())
       .get('/api/health')
       .expect(200)
