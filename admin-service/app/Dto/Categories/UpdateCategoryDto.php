@@ -1,0 +1,12 @@
+<?php
+
+namespace App\Dto\Categories;
+
+final readonly class UpdateCategoryDto
+{
+    public function __construct(
+        public string $name,
+        /** Null makes it a top-level category */
+        public ?string $parentId = null,
+    ) {}
+}
