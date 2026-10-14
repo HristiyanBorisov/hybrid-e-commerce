@@ -1,0 +1,83 @@
+# CI: every push and pull request runs exactly what a developer (or a reviewer) runs locally — a fresh
+# `make setup`, a smoke test, then lint and the tests with coverage. Only Docker and make are needed.
+#
+# CD: a push to main that passed CI is deployed to a server over SSH. It's switched off until a server is
+# configured (see "CI/CD" in the README); until then the deploy job is skipped.
+name: CI/CD
+
+on:
+  push:
+  pull_request:
+
+# A newer push to the same branch cancels the run that's still going
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Setup, lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up everything, like on a fresh clone (README quick start)
+        run: make setup
+
+      - name: Smoke test through nginx
+        run: |
+          curl -fsS localhost:8080/api/health
+          curl -fsS -o /dev/null localhost:8080/up
+          curl -fsS localhost:8080/admin/login | grep -q 'Log in'
+          curl -fsS 'localhost:8080/api/v1/products?limit=1' | grep -q '"total":12'
+
+      - name: Code style
+        run: make lint
+
+      - name: Tests with coverage (fails below 90%)
+        run: make coverage
+
+      - name: Keep the NestJS coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-gateway-coverage
+          path: api-gateway/coverage/
+          if-no-files-found: ignore
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+  deploy:
+    name: Deploy
+    needs: test
+    # Pushes to main only, and only once a server is configured (repository variable DEPLOY_HOST)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    # Deployments never overlap; a newer one waits for the running one
+    concurrency: production
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # The server's host key is pinned: a runner is new every time, so "trust on first use" would trust anyone
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          # Update the code, its dependencies and the CSS, restart what changed, run new migrations
+          ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && git pull --ff-only && make build install assets up migrate"
