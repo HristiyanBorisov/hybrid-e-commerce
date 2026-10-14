@@ -5,7 +5,11 @@ FROM php:8.4-fpm-alpine AS base
 COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
 
 # pdo_pgsql: PostgreSQL | redis: cache, sessions, queues | pcntl: graceful queue workers | zip: Composer downloads
-RUN install-php-extensions pdo_pgsql redis pcntl zip
+# gd: product image thumbnails
+RUN install-php-extensions pdo_pgsql redis pcntl zip gd
+
+# Product images and CSV imports up to 10 MB (nginx allows the same)
+RUN printf "upload_max_filesize=10M\npost_max_size=12M\n" > "$PHP_INI_DIR/conf.d/uploads.ini"
 
 WORKDIR /app
 

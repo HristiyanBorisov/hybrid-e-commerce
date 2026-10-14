@@ -97,6 +97,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Dates without a time zone (and date_trunc() in the reports) are read as UTC, like the app's dates
+            'timezone' => 'UTC',
         ],
 
         'sqlsrv' => [
